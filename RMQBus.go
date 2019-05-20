@@ -19,7 +19,7 @@ type RMQ struct {
 	Conn *amqp.Connection
 }
 
-type responder func(interface{}, chan interface{})
+type EventHandler func(interface{}, chan interface{})
 
 var singleton *RMQ
 var once sync.Once
@@ -126,7 +126,7 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 	log.Printf(" [x] Sent To %s", topic)
 }
 
-func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]responder, consumerRegistry map[string]responder) {
+func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler) {
 
 	initCh, err := RMQ.Conn.Channel()
 	utils.FailOnError(err, "Failed to open a channel")
