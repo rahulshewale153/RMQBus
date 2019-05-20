@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"log-aggregator/utils"
 	"math/rand"
 	"os"
 	"strings"
@@ -129,14 +128,14 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler) {
 
 	initCh, err := RMQ.Conn.Channel()
-	utils.FailOnError(err, "Failed to open a channel")
+	failOnError(err, "Failed to open a channel")
 
 	err = initCh.Qos(
 		1,     // prefetch count
 		0,     // prefetch size
 		false, // global
 	)
-	utils.FailOnError(err, "Failed to set QoS")
+	failOnError(err, "Failed to set QoS")
 
 	for k, responderFunction := range responderRegistry {
 
@@ -151,7 +150,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			false,     // no-wait
 			nil,       // arguments
 		)
-		utils.FailOnError(err, "Failed to declare a queue")
+		failOnError(err, "Failed to declare a queue")
 
 		msgs, err := initCh.Consume(
 			q.Name, // queue
@@ -162,12 +161,12 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			false,  // no-wait
 			nil,    // args
 		)
-		utils.FailOnError(err, "Failed to register a consumer")
+		failOnError(err, "Failed to register a consumer")
 		go func() {
 			for msgItem := range msgs {
 				var req interface{}
 				json.Unmarshal([]byte(msgItem.Body), &req)
-				utils.FailOnError(err, "Failed to convert body to integer")
+				failOnError(err, "Failed to convert body to integer")
 
 				//Call responder function
 				cbFunc := make(chan interface{})
@@ -183,7 +182,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 				}
 
 				err = initCh.Publish("", msgItem.ReplyTo, false, false, msgToSend)
-				utils.FailOnError(err, "Failed to publish a message")
+				failOnError(err, "Failed to publish a message")
 
 				msgItem.Ack(true)
 			}
@@ -192,7 +191,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 	}
 
 	initChConsumer, err := RMQ.Conn.Channel()
-	utils.FailOnError(err, "Failed to open a channel")
+	failOnError(err, "Failed to open a channel")
 
 	for e, consumerinstance := range consumerRegistry {
 
@@ -209,7 +208,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			false,    // no-wait
 			nil,      // arguments
 		)
-		utils.FailOnError(err, "Failed to declare an exchange")
+		failOnError(err, "Failed to declare an exchange")
 		q, err := initChConsumer.QueueDeclare(
 			QueueName, // name
 			false,     // durable
@@ -218,7 +217,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			false,     // no-wait
 			nil,       // arguments
 		)
-		utils.FailOnError(err, "Failed to declare a queue")
+		failOnError(err, "Failed to declare a queue")
 
 		err = initChConsumer.QueueBind(
 			q.Name,     // queue name
@@ -226,7 +225,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			appName,    // exchange
 			false,
 			nil)
-		utils.FailOnError(err, "Failed to bind a queue")
+		failOnError(err, "Failed to bind a queue")
 
 		msgs, err := initChConsumer.Consume(
 			q.Name, // queue
@@ -237,12 +236,12 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			false,  // no-wait
 			nil,    // args
 		)
-		utils.FailOnError(err, "Failed to register a consumer")
+		failOnError(err, "Failed to register a consumer")
 		go func() {
 			for msgItem := range msgs {
 				var req interface{}
 				json.Unmarshal([]byte(msgItem.Body), &req)
-				utils.FailOnError(err, "Failed to convert body")
+				failOnError(err, "Failed to convert body")
 
 				cbFunc := make(chan interface{})
 				go consumerFunction(req, cbFunc)
