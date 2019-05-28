@@ -140,7 +140,8 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 	for k, responderFunction := range responderRegistry {
 
 		key, resp := k, responderFunction
-		temp := []string{"program.", key}
+
+		temp := []string{appName, ".", key}
 		topicName := strings.Join(temp, "")
 		q, err := initCh.QueueDeclare(
 			topicName, // name
@@ -197,7 +198,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 
 		routingKey := e
 		consumerFunction := consumerinstance
-		temp := []string{"program.", routingKey}
+		temp := []string{appName, ".", routingKey}
 		QueueName := strings.Join(temp, "")
 		err = initChConsumer.ExchangeDeclare(
 			appName,  // name
