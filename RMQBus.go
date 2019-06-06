@@ -125,7 +125,7 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 	log.Printf(" [x] Sent To %s", topic)
 }
 
-func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler) {
+func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) {
 
 	initCh, err := RMQ.Conn.Channel()
 	failOnError(err, "Failed to open a channel")
@@ -191,16 +191,23 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 		fmt.Println(" [x] Responder Registerd for event :", topicName)
 	}
 
-	initChConsumer, err := RMQ.Conn.Channel()
+	registerConumerFunctions(appName, RMQ.Conn, consumerRegistry)
+
+	registerConumerFunctions("ayopop", RMQ.Conn, globalConsumerRegsitry)
+}
+
+func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler) {
+
+	channelReg, err := rmqcon.Channel()
 	failOnError(err, "Failed to open a channel")
 
-	for e, consumerinstance := range consumerRegistry {
+	for e, consumerinstance := range funcRegistry {
 
 		routingKey := e
 		consumerFunction := consumerinstance
 		temp := []string{appName, ".", routingKey}
 		QueueName := strings.Join(temp, "")
-		err = initChConsumer.ExchangeDeclare(
+		err = channelReg.ExchangeDeclare(
 			appName,  // name
 			"direct", // type
 			false,    // durable
@@ -210,7 +217,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			nil,      // arguments
 		)
 		failOnError(err, "Failed to declare an exchange")
-		q, err := initChConsumer.QueueDeclare(
+		q, err := channelReg.QueueDeclare(
 			QueueName, // name
 			false,     // durable
 			false,     // delete when usused
@@ -220,7 +227,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 		)
 		failOnError(err, "Failed to declare a queue")
 
-		err = initChConsumer.QueueBind(
+		err = channelReg.QueueBind(
 			q.Name,     // queue name
 			routingKey, // routing key
 			appName,    // exchange
@@ -228,7 +235,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			nil)
 		failOnError(err, "Failed to bind a queue")
 
-		msgs, err := initChConsumer.Consume(
+		msgs, err := channelReg.Consume(
 			q.Name, // queue
 			"",     // consumer
 			true,   // auto-ack
@@ -251,7 +258,7 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 			}
 		}()
 
-		fmt.Println(" [x] Consumer registered for event :", routingKey)
+		fmt.Println(" [x] Consumer registered for event :", QueueName)
 	}
 }
 
