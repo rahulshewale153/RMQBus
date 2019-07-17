@@ -191,12 +191,12 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 		fmt.Println(" [x] Responder Registerd for event :", topicName)
 	}
 
-	registerConumerFunctions(appName, RMQ.Conn, consumerRegistry)
+	registerConumerFunctions(appName, RMQ.Conn, consumerRegistry, false)
 
-	registerConumerFunctions("ayopop", RMQ.Conn, globalConsumerRegsitry)
+	registerConumerFunctions(appName, RMQ.Conn, globalConsumerRegsitry, true)
 }
 
-func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler) {
+func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler, isGlobal bool) {
 
 	channelReg, err := rmqcon.Channel()
 	failOnError(err, "Failed to open a channel")
@@ -207,14 +207,19 @@ func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegis
 		consumerFunction := consumerinstance
 		temp := []string{appName, ".", routingKey}
 		QueueName := strings.Join(temp, "")
+		exchangeName := appName
+		if isGlobal == true {
+			exchangeName = "ayopop"
+		}
+
 		err = channelReg.ExchangeDeclare(
-			appName,  // name
-			"direct", // type
-			false,    // durable
-			false,    // auto-deleted
-			false,    // internal
-			false,    // no-wait
-			nil,      // arguments
+			exchangeName, // name
+			"direct",     // type
+			false,        // durable
+			false,        // auto-deleted
+			false,        // internal
+			false,        // no-wait
+			nil,          // arguments
 		)
 		failOnError(err, "Failed to declare an exchange")
 		q, err := channelReg.QueueDeclare(
