@@ -233,9 +233,9 @@ func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegis
 		failOnError(err, "Failed to declare a queue")
 
 		err = channelReg.QueueBind(
-			q.Name,     // queue name
-			routingKey, // routing key
-			appName,    // exchange
+			q.Name,       // queue name
+			routingKey,   // routing key
+			exchangeName, // exchange
 			false,
 			nil)
 		failOnError(err, "Failed to bind a queue")
