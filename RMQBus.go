@@ -23,11 +23,23 @@ type EventHandler func(interface{}, chan interface{})
 var singleton *RMQ
 var once sync.Once
 
+func (errorChannel *amqp.Error) reconnector() {
+	for {
+		err := <-errorChannel
+		fmt.Println("connection closed captures", err)
+	}
+}
+
 func GetConnection() *RMQ {
 	once.Do(func() {
 
 		conn, err := amqp.Dial(os.Getenv("rmq_uri"))
 		failOnError(err, "Failed to connect to RabbitMQ")
+
+		if err == nil {
+			errorChannel := make(chan *amqp.Error)
+			conn.NotifyClose(errorChannel)
+		}
 
 		ch, err := conn.Channel()
 		failOnError(err, "Failed to open a channel")
