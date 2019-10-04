@@ -270,6 +270,7 @@ func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegis
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
+		panic(fmt.Sprintf("%s: %s", msg, err))
 	}
 }
 
