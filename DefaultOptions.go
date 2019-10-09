@@ -19,7 +19,7 @@ type DefaultOptions struct {
 	CONSUME_CALL_NOACK           bool
 }
 
-func New(appName string, url string) DefaultOptions {
+func CreateDefaultOptions(appName string, url string) DefaultOptions {
 	e := DefaultOptions{appName, url, "ayopop", 60000, true, false, false, false, true, true, true, false, false, false, true, false}
 	return e
 }
