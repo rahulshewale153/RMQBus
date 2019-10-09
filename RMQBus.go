@@ -14,8 +14,9 @@ import (
 )
 
 type RMQ struct {
-	Ch   *amqp.Channel
-	Conn *amqp.Connection
+	Ch      *amqp.Channel
+	Conn    *amqp.Connection
+	Options DefaultOptions
 }
 
 type EventHandler func(interface{}, chan interface{})
@@ -23,16 +24,16 @@ type EventHandler func(interface{}, chan interface{})
 var singleton *RMQ
 var once sync.Once
 
-func GetConnection() *RMQ {
+func GetConnection(rmqConfig DefaultOptions) *RMQ {
 	once.Do(func() {
 
-		conn, err := amqp.Dial(os.Getenv("rmq_uri"))
+		conn, err := amqp.Dial(rmqConfig.URL)
 		failOnError(err, "Failed to connect to RabbitMQ")
 
 		ch, err := conn.Channel()
 		failOnError(err, "Failed to open a channel")
 
-		singleton = &RMQ{Ch: ch, Conn: conn}
+		singleton = &RMQ{Ch: ch, Conn: conn, Options: rmqConfig}
 	})
 	return singleton
 }
@@ -49,7 +50,7 @@ func init() {
 }
 
 func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
-
+	options := RMQ.Options
 	ch, err := RMQ.Conn.Channel()
 	failOnError(err, "Failed to open a channel")
 
@@ -64,13 +65,13 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	failOnError(err, "Failed to declare a queue")
 
 	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		true,   // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+		q.Name,                     // queue
+		"",                         // consumer
+		options.CONSUME_CALL_NOACK, // auto-ack
+		false,                      // exclusive
+		false,                      // no-local
+		false,                      // no-wait
+		nil,                        // args
 	)
 	failOnError(err, "Failed to register a consumer")
 
@@ -125,11 +126,11 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 	log.Printf(" [x] Sent To %s", topic)
 }
 
-func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) {
+func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) {
 
 	initCh, err := RMQ.Conn.Channel()
 	failOnError(err, "Failed to open a channel")
-
+	options := RMQ.Options
 	err = initCh.Qos(
 		1,     // prefetch count
 		0,     // prefetch size
@@ -141,15 +142,15 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 
 		key, resp := k, responderFunction
 
-		temp := []string{appName, ".", key}
+		temp := []string{options.APP_NAME, ".", key}
 		topicName := strings.Join(temp, "")
 		q, err := initCh.QueueDeclare(
-			topicName, // name
-			false,     // durable
-			false,     // delete when usused
-			false,     // exclusive
-			false,     // no-wait
-			nil,       // arguments
+			topicName,                         // name
+			options.RESPONDER_QUEUE_DURABLE,   // durable
+			options.RESPONDER_QUEUE_AUTODEL,   // delete when usused
+			options.RESPONDER_QUEUE_EXCLUSIVE, // exclusive
+			false,                             // no-wait
+			nil,                               // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 
@@ -191,12 +192,12 @@ func (RMQ *RMQ) InitFunctions(appName string, responderRegistry map[string]Event
 		fmt.Println(" [x] Responder Registerd for event :", topicName)
 	}
 
-	registerConumerFunctions(appName, RMQ.Conn, consumerRegistry, false)
+	registerConumerFunctions(options, RMQ.Conn, consumerRegistry, false)
 
-	registerConumerFunctions(appName, RMQ.Conn, globalConsumerRegsitry, true)
+	registerConumerFunctions(options, RMQ.Conn, globalConsumerRegsitry, true)
 }
 
-func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler, isGlobal bool) {
+func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler, isGlobal bool) {
 
 	channelReg, err := rmqcon.Channel()
 	failOnError(err, "Failed to open a channel")
@@ -205,30 +206,30 @@ func registerConumerFunctions(appName string, rmqcon *amqp.Connection, funcRegis
 
 		routingKey := e
 		consumerFunction := consumerinstance
-		temp := []string{appName, ".", routingKey}
+		temp := []string{options.APP_NAME, ".", routingKey}
 		QueueName := strings.Join(temp, "")
-		exchangeName := appName
+		exchangeName := options.APP_NAME
 		if isGlobal == true {
-			exchangeName = "ayopop"
+			exchangeName = options.GLOBAL_EXCHANGE_NAME
 		}
 
 		err = channelReg.ExchangeDeclare(
-			exchangeName, // name
-			"direct",     // type
-			false,        // durable
-			false,        // auto-deleted
-			false,        // internal
-			false,        // no-wait
-			nil,          // arguments
+			exchangeName,                      // name
+			"direct",                          // type
+			options.CONSUMER_EXCHANGE_DURABLE, // durable
+			options.CONSUMER_EXCHANGE_AUTODEL, // auto-deleted
+			false,                             // internal
+			false,                             // no-wait
+			nil,                               // arguments
 		)
 		failOnError(err, "Failed to declare an exchange")
 		q, err := channelReg.QueueDeclare(
-			QueueName, // name
-			false,     // durable
-			false,     // delete when usused
-			false,     // exclusive
-			false,     // no-wait
-			nil,       // arguments
+			QueueName,                        // name
+			options.CONSUMER_QUEUE_DURABLE,   // durable
+			options.CONSUMER_QUEUE_AUTODEL,   // delete when usused
+			options.CONSUMER_QUEUE_EXCLUSIVE, // exclusive
+			false,                            // no-wait
+			nil,                              // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 
