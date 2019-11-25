@@ -233,12 +233,19 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 				}
 
 				returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
-
+				fmt.Println(returns)
 				err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
-				for r := range returns {
-					msgItem.Ack(true)
-					fmt.Println("Notify Return called", r)
-				}
+				go func() {
+					for { //receive loop
+						ok := <-returns
+						fmt.Println(ok)
+						if ok.ReplyCode == 312 {
+							msgItem.Ack(true)
+							Qclose <- true
+							fmt.Println("connection queue close :  due to queue close")
+						}
+					}
+				}()
 				failOnError(err, "Failed to publish a message")
 
 				msgItem.Ack(true)
