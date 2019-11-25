@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
-	"os"
 	"strings"
 	"sync"
 
@@ -24,22 +23,54 @@ type EventHandler func(interface{}, chan interface{})
 var singleton *RMQ
 var once sync.Once
 
+var Qclose = make(chan bool)
+
 func GetConnection(rmqConfig DefaultOptions) *RMQ {
 	once.Do(func() {
 
 		conn, err := amqp.Dial(rmqConfig.URL)
 		failOnError(err, "Failed to connect to RabbitMQ")
 
+		notify := conn.NotifyClose(make(chan *amqp.Error)) //error channels
+
+		go func() {
+			for { //receive loop
+				ok := <-notify
+				if ok != nil {
+					Qclose <- true
+					fmt.Println("connection close")
+				}
+
+			}
+
+		}()
+
 		ch, err := conn.Channel()
+		cancels := ch.NotifyCancel(make(chan string, 1))
+
+		go func() {
+			for { //receive loop
+				ok := <-cancels
+				fmt.Println(ok)
+				if ok != "" {
+					Qclose <- true
+					fmt.Println("connection close")
+				}
+
+			}
+
+		}()
 		failOnError(err, "Failed to open a channel")
 
 		singleton = &RMQ{Ch: ch, Conn: conn, Options: rmqConfig}
+
 	})
+
 	return singleton
 }
 
 func init() {
-	value := os.Getenv("app")
+	value := "test"
 	if len(value) == 0 {
 		err1 := godotenv.Load()
 		if err1 != nil {
@@ -52,6 +83,7 @@ func init() {
 func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	options := RMQ.Options
 	ch, err := RMQ.Conn.Channel()
+
 	failOnError(err, "Failed to open a channel")
 
 	q, err := ch.QueueDeclare(
@@ -65,13 +97,13 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	failOnError(err, "Failed to declare a queue")
 
 	msgs, err := ch.Consume(
-		q.Name,                     // queue
-		"",                         // consumer
+		q.Name, // queue
+		"",     // consumer
 		options.CONSUME_CALL_NOACK, // auto-ack
-		false,                      // exclusive
-		false,                      // no-local
-		false,                      // no-wait
-		nil,                        // args
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
 	)
 	failOnError(err, "Failed to register a consumer")
 
@@ -109,6 +141,7 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 	exchange, rKey := temp[0], temp[1]
 
 	ch, err := RMQ.Conn.Channel()
+
 	failOnError(err, "Failed to open a channel")
 
 	err = ch.Publish(
@@ -124,6 +157,7 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 	failOnError(err, "Failed to publish a message")
 
 	log.Printf(" [x] Sent To %s", topic)
+
 }
 
 func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) {
@@ -149,8 +183,8 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 			options.RESPONDER_QUEUE_DURABLE,   // durable
 			options.RESPONDER_QUEUE_AUTODEL,   // delete when usused
 			options.RESPONDER_QUEUE_EXCLUSIVE, // exclusive
-			false,                             // no-wait
-			nil,                               // arguments
+			false, // no-wait
+			nil,   // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 
@@ -163,6 +197,21 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 			false,  // no-wait
 			nil,    // args
 		)
+
+		notifych := initCh.NotifyCancel(make(chan string)) //error channels
+
+		go func() {
+			for { //receive loop
+				ok := <-notifych
+				fmt.Println(ok)
+				if ok != "" {
+					Qclose <- true
+					fmt.Println("connection queue close ")
+				}
+
+			}
+
+		}()
 		failOnError(err, "Failed to register a consumer")
 		go func() {
 			for msgItem := range msgs {
@@ -183,7 +232,13 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 					Body:          []byte(strResponse),
 				}
 
-				err = initCh.Publish("", msgItem.ReplyTo, false, false, msgToSend)
+				returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
+
+				err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
+				for r := range returns {
+					msgItem.Ack(true)
+					fmt.Println("Notify Return called", r)
+				}
 				failOnError(err, "Failed to publish a message")
 
 				msgItem.Ack(true)
@@ -214,13 +269,13 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 		}
 
 		err = channelReg.ExchangeDeclare(
-			exchangeName,                      // name
-			"direct",                          // type
+			exchangeName, // name
+			"direct",     // type
 			options.CONSUMER_EXCHANGE_DURABLE, // durable
 			options.CONSUMER_EXCHANGE_AUTODEL, // auto-deleted
-			false,                             // internal
-			false,                             // no-wait
-			nil,                               // arguments
+			false, // internal
+			false, // no-wait
+			nil,   // arguments
 		)
 		failOnError(err, "Failed to declare an exchange")
 		q, err := channelReg.QueueDeclare(
@@ -228,8 +283,8 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			options.CONSUMER_QUEUE_DURABLE,   // durable
 			options.CONSUMER_QUEUE_AUTODEL,   // delete when usused
 			options.CONSUMER_QUEUE_EXCLUSIVE, // exclusive
-			false,                            // no-wait
-			nil,                              // arguments
+			false, // no-wait
+			nil,   // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 
@@ -251,6 +306,20 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			nil,    // args
 		)
 		failOnError(err, "Failed to register a consumer")
+		notifych := channelReg.NotifyCancel(make(chan string)) //error channels
+
+		go func() {
+			for { //receive loop
+				ok := <-notifych
+				fmt.Println(ok)
+				if ok != "" {
+					Qclose <- true
+					fmt.Println("connection queue close ")
+				}
+
+			}
+
+		}()
 		go func() {
 			for msgItem := range msgs {
 				var req interface{}
@@ -266,6 +335,18 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 
 		fmt.Println(" [x] Consumer registered for event :", QueueName)
 	}
+}
+
+func (RMQ *RMQ) HandleQClose(done chan string) {
+
+	go func() {
+		for {
+			if true == <-Qclose {
+				done <- "true"
+			}
+		}
+	}()
+
 }
 
 func failOnError(err error, msg string) {
