@@ -159,17 +159,18 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 			false,  // no-wait
 			nil,    // args
 		)
-		/*notifych := initCh.NotifyCancel(make(chan string)) //error channels
+		notifych := initCh.NotifyClose(make(chan *amqp.Error))
 		go func() {
 			for { //receive loop
 				ok := <-notifych
-				fmt.Println(ok)
-				if ok != "" {
-					Qclose <- true
-					fmt.Println("connection queue close ")
+				fmt.Println("printing ok", ok)
+				if ok != nil {
+					//Qclose <- true
+					fmt.Println("connection queue close ", ok)
 				}
 			}
-		}()*/
+		}()
+
 		failOnError(err, "Failed to register a consumer")
 		go func() {
 			for msgItem := range msgs {
@@ -209,11 +210,12 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 
 				if err != nil {
 					//log.Fatalf("%s: %s", msg, err)
-					fmt.Println("got error in line number 209", err)
+					fmt.Println("got error in line number 212", err)
 					//Qclose <- true
 					//panic(fmt.Sprintf("%s: %s", msg, err))
 				}
-				msgItem.Ack(true)
+				errrr := msgItem.Ack(false)
+				fmt.Println(errrr)
 
 				//failOnError(err, "Failed to publish a message")
 
