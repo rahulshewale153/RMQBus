@@ -17,58 +17,43 @@ type RMQ struct {
 	Conn    *amqp.Connection
 	Options DefaultOptions
 }
-
 type EventHandler func(interface{}, chan interface{})
 
 var singleton *RMQ
 var once sync.Once
-
 var Qclose = make(chan bool)
 
 func GetConnection(rmqConfig DefaultOptions) *RMQ {
 	once.Do(func() {
-
 		conn, err := amqp.Dial(rmqConfig.URL)
 		failOnError(err, "Failed to connect to RabbitMQ")
-
 		notify := conn.NotifyClose(make(chan *amqp.Error)) //error channels
-
 		go func() {
 			for { //receive loop
 				ok := <-notify
 				if ok != nil {
 					Qclose <- true
-					fmt.Println("connection close")
+					fmt.Println("connection close asdasd")
 				}
-
 			}
-
 		}()
-
 		ch, err := conn.Channel()
-		cancels := ch.NotifyCancel(make(chan string, 1))
-
+		/*cancels := ch.NotifyCancel(make(chan string, 1))
 		go func() {
 			for { //receive loop
 				ok := <-cancels
-				fmt.Println(ok)
+				fmt.Println("asd", ok)
 				if ok != "" {
 					Qclose <- true
-					fmt.Println("connection close")
+					fmt.Println("connection close notify cancle")
 				}
-
 			}
-
-		}()
+		}()*/
 		failOnError(err, "Failed to open a channel")
-
 		singleton = &RMQ{Ch: ch, Conn: conn, Options: rmqConfig}
-
 	})
-
 	return singleton
 }
-
 func init() {
 	value := "test"
 	if len(value) == 0 {
@@ -77,15 +62,11 @@ func init() {
 			log.Panic(err1)
 		}
 	}
-
 }
-
 func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	options := RMQ.Options
 	ch, err := RMQ.Conn.Channel()
-
 	failOnError(err, "Failed to open a channel")
-
 	q, err := ch.QueueDeclare(
 		"",    // name
 		false, // durable
@@ -95,7 +76,6 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 		nil,   // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
-
 	msgs, err := ch.Consume(
 		q.Name, // queue
 		"",     // consumer
@@ -106,9 +86,7 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 		nil,   // args
 	)
 	failOnError(err, "Failed to register a consumer")
-
 	corrId := randomString(32)
-
 	err = ch.Publish(
 		"",    // exchange
 		topic, // routing key
@@ -121,7 +99,6 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 			Body:          []byte(msg),
 		})
 	failOnError(err, "Failed to publish a message")
-
 	var res interface{}
 	for d := range msgs {
 		if corrId == d.CorrelationId {
@@ -131,19 +108,13 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 			break
 		}
 	}
-
 	return res
 }
-
 func (RMQ *RMQ) Publish(topic string, msg string) {
-
 	temp := strings.Split(topic, ".")
 	exchange, rKey := temp[0], temp[1]
-
 	ch, err := RMQ.Conn.Channel()
-
 	failOnError(err, "Failed to open a channel")
-
 	err = ch.Publish(
 		exchange, // exchange
 		rKey,     // routing key
@@ -153,15 +124,10 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 			ContentType: "text/plain",
 			Body:        []byte(msg),
 		})
-
 	failOnError(err, "Failed to publish a message")
-
 	log.Printf(" [x] Sent To %s", topic)
-
 }
-
 func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) {
-
 	initCh, err := RMQ.Conn.Channel()
 	failOnError(err, "Failed to open a channel")
 	options := RMQ.Options
@@ -171,11 +137,8 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 		false, // global
 	)
 	failOnError(err, "Failed to set QoS")
-
 	for k, responderFunction := range responderRegistry {
-
 		key, resp := k, responderFunction
-
 		temp := []string{options.APP_NAME, ".", key}
 		topicName := strings.Join(temp, "")
 		q, err := initCh.QueueDeclare(
@@ -187,7 +150,6 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 			nil,   // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
-
 		msgs, err := initCh.Consume(
 			q.Name, // queue
 			"",     // consumer
@@ -197,9 +159,7 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 			false,  // no-wait
 			nil,    // args
 		)
-
-		notifych := initCh.NotifyCancel(make(chan string)) //error channels
-
+		/*notifych := initCh.NotifyCancel(make(chan string)) //error channels
 		go func() {
 			for { //receive loop
 				ok := <-notifych
@@ -208,73 +168,54 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 					Qclose <- true
 					fmt.Println("connection queue close ")
 				}
-
 			}
-
-		}()
+		}()*/
 		failOnError(err, "Failed to register a consumer")
 		go func() {
 			for msgItem := range msgs {
 				var req interface{}
 				json.Unmarshal([]byte(msgItem.Body), &req)
 				failOnError(err, "Failed to convert body to integer")
-
 				//Call responder function
 				cbFunc := make(chan interface{})
 				go resp(req, cbFunc)
 				response := <-cbFunc
 				strResponse, err := json.Marshal(response)
-
 				msgToSend := amqp.Publishing{
 					DeliveryMode:  amqp.Persistent,
 					ContentType:   "text/plain",
 					CorrelationId: msgItem.CorrelationId,
 					Body:          []byte(strResponse),
 				}
-
-				//returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
-				//fmt.Println(returns)
-
-				if _, err := initCh.QueueInspect(msgItem.ReplyTo); err != nil {
-					msgItem.Ack(true)
-					Qclose <- true
-					fmt.Println("queue not found")
-				} else {
-					err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
-				}
-				/*go func() {
+				returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
+				//fmt.Println(msgItem.ReplyTo)
+				err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
+				go func() {
 					for { //receive loop
 						ok := <-returns
 						//fmt.Println(ok)
 						if ok.ReplyCode == 312 {
+							fmt.Println(msgItem)
 							msgItem.Ack(true)
-							panic("queue closed")
-							//Qclose <- true
-							//fmt.Println("connection queue close :  due to queue close")
+							//panic("queue closed")
+							fmt.Println("connection queue close :  due to queue close")
+							Qclose <- true
 						}
 					}
-				}()*/
-
+				}()
 				failOnError(err, "Failed to publish a message")
-
 				msgItem.Ack(true)
 			}
 		}()
 		fmt.Println(" [x] Responder Registerd for event :", topicName)
 	}
-
 	registerConumerFunctions(options, RMQ.Conn, consumerRegistry, false)
-
 	registerConumerFunctions(options, RMQ.Conn, globalConsumerRegsitry, true)
 }
-
 func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler, isGlobal bool) {
-
 	channelReg, err := rmqcon.Channel()
 	failOnError(err, "Failed to open a channel")
-
 	for e, consumerinstance := range funcRegistry {
-
 		routingKey := e
 		consumerFunction := consumerinstance
 		temp := []string{options.APP_NAME, ".", routingKey}
@@ -283,7 +224,6 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 		if isGlobal == true {
 			exchangeName = options.GLOBAL_EXCHANGE_NAME
 		}
-
 		err = channelReg.ExchangeDeclare(
 			exchangeName, // name
 			"direct",     // type
@@ -303,7 +243,6 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			nil,   // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
-
 		err = channelReg.QueueBind(
 			q.Name,       // queue name
 			routingKey,   // routing key
@@ -311,7 +250,6 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			false,
 			nil)
 		failOnError(err, "Failed to bind a queue")
-
 		msgs, err := channelReg.Consume(
 			q.Name, // queue
 			"",     // consumer
@@ -322,8 +260,7 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			nil,    // args
 		)
 		failOnError(err, "Failed to register a consumer")
-		notifych := channelReg.NotifyCancel(make(chan string)) //error channels
-
+		/*notifych := channelReg.NotifyCancel(make(chan string)) //error channels
 		go func() {
 			for { //receive loop
 				ok := <-notifych
@@ -332,29 +269,22 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 					Qclose <- true
 					fmt.Println("connection queue close ")
 				}
-
 			}
-
-		}()
+		}()*/
 		go func() {
 			for msgItem := range msgs {
 				var req interface{}
 				json.Unmarshal([]byte(msgItem.Body), &req)
 				failOnError(err, "Failed to convert body")
-
 				cbFunc := make(chan interface{})
 				go consumerFunction(req, cbFunc)
 				<-cbFunc
-
 			}
 		}()
-
 		fmt.Println(" [x] Consumer registered for event :", QueueName)
 	}
 }
-
 func (RMQ *RMQ) HandleQClose(done chan string) {
-
 	go func() {
 		for {
 			if true == <-Qclose {
@@ -362,16 +292,13 @@ func (RMQ *RMQ) HandleQClose(done chan string) {
 			}
 		}
 	}()
-
 }
-
 func failOnError(err error, msg string) {
 	if err != nil {
-		log.Fatalf("%s: %s", msg, err)
+		//log.Fatalf("%s: %s", msg, err)
 		panic(fmt.Sprintf("%s: %s", msg, err))
 	}
 }
-
 func randomString(l int) string {
 	bytes := make([]byte, l)
 	for i := 0; i < l; i++ {
@@ -379,7 +306,6 @@ func randomString(l int) string {
 	}
 	return string(bytes)
 }
-
 func randInt(min int, max int) int {
 	return min + rand.Intn(max-min)
 }

@@ -4,7 +4,6 @@ import (
 	"RMQBus"
 	"fmt"
 	"log"
-	"time"
 )
 
 var p = RMQBus.DefaultOptions{"test", "amqp://localhost:5672", "tests", 60000, true, false, false, false, true, true, true, false, false, false, true, false}
@@ -19,7 +18,7 @@ func main() {
 }
 
 func Printme() string {
-	time.Sleep(40000 * time.Millisecond)
+	//time.Sleep(40000 * time.Millisecond)
 	return "suman"
 }
 
