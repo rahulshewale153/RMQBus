@@ -203,8 +203,15 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 						}
 					}
 				}()
-				failOnError(err, "Failed to publish a message")
 				msgItem.Ack(true)
+				if err != nil {
+					//log.Fatalf("%s: %s", msg, err)
+					fmt.Println("got error in line number 209", err)
+					Qclose <- true
+					//panic(fmt.Sprintf("%s: %s", msg, err))
+				}
+				//failOnError(err, "Failed to publish a message")
+
 			}
 		}()
 		fmt.Println(" [x] Responder Registerd for event :", topicName)
