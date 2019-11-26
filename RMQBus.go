@@ -187,10 +187,10 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 					CorrelationId: msgItem.CorrelationId,
 					Body:          []byte(strResponse),
 				}
-				returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
+				//returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
 				//fmt.Println(msgItem.ReplyTo)
 				err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
-				go func() {
+				/*go func() {
 					for { //receive loop
 						ok := <-returns
 						//fmt.Println(ok)
@@ -205,16 +205,16 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 							//Qclose <- true
 						}
 					}
-				}()
+				}()*/
 
 				if err != nil {
 					//log.Fatalf("%s: %s", msg, err)
 					fmt.Println("got error in line number 209", err)
-					Qclose <- true
+					//Qclose <- true
 					//panic(fmt.Sprintf("%s: %s", msg, err))
-				} else {
-					msgItem.Ack(true)
 				}
+				msgItem.Ack(true)
+
 				//failOnError(err, "Failed to publish a message")
 
 			}
