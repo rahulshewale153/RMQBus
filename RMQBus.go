@@ -193,7 +193,7 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 				go func() {
 					for { //receive loop
 						ok := <-returns
-						//fmt.Println(ok)
+						fmt.Println("Code", ok.ReplyCode)
 						if ok.ReplyCode == 312 {
 							fmt.Println(msgItem)
 							msgItem.Ack(true)
@@ -203,12 +203,14 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 						}
 					}
 				}()
-				msgItem.Ack(true)
+
 				if err != nil {
 					//log.Fatalf("%s: %s", msg, err)
 					fmt.Println("got error in line number 209", err)
 					Qclose <- true
 					//panic(fmt.Sprintf("%s: %s", msg, err))
+				} else {
+					msgItem.Ack(true)
 				}
 				//failOnError(err, "Failed to publish a message")
 
