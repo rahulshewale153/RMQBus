@@ -238,11 +238,12 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 				go func() {
 					for { //receive loop
 						ok := <-returns
-						fmt.Println(ok)
+						//fmt.Println(ok)
 						if ok.ReplyCode == 312 {
 							msgItem.Ack(true)
-							Qclose <- true
-							fmt.Println("connection queue close :  due to queue close")
+							panic("queue closed")
+							//Qclose <- true
+							//fmt.Println("connection queue close :  due to queue close")
 						}
 					}
 				}()
