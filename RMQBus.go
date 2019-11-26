@@ -296,7 +296,9 @@ func (RMQ *RMQ) HandleQClose(done chan string) {
 func failOnError(err error, msg string) {
 	if err != nil {
 		//log.Fatalf("%s: %s", msg, err)
-		panic(fmt.Sprintf("%s: %s", msg, err))
+		fmt.Println(msg, err)
+		Qclose <- true
+		//panic(fmt.Sprintf("%s: %s", msg, err))
 	}
 }
 func randomString(l int) string {
