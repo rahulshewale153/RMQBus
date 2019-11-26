@@ -197,9 +197,12 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 						if ok.ReplyCode >= 0 {
 							fmt.Println(msgItem)
 							msgItem.Ack(true)
+							inntt, errr := initCh.QueueDelete(msgItem.ReplyTo, false, false, true)
+							fmt.Println("delete", inntt)
+							fmt.Println("queue", errr)
 							//panic("queue closed")
-							fmt.Println("connection queue close :  due to queue close")
-							Qclose <- true
+							//fmt.Println("connection queue close :  due to queue close")
+							//Qclose <- true
 						}
 					}
 				}()
