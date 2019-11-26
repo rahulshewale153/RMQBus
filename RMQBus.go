@@ -232,10 +232,17 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 					Body:          []byte(strResponse),
 				}
 
-				returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
-				fmt.Println(returns)
-				err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
-				go func() {
+				//returns := initCh.NotifyReturn(make(chan amqp.Return, 1))
+				//fmt.Println(returns)
+
+				if _, err := initCh.QueueInspect(msgItem.ReplyTo); err != nil {
+					msgItem.Ack(true)
+					Qclose <- true
+					fmt.Println("queue not found")
+				} else {
+					err = initCh.Publish("", msgItem.ReplyTo, true, false, msgToSend)
+				}
+				/*go func() {
 					for { //receive loop
 						ok := <-returns
 						//fmt.Println(ok)
@@ -246,7 +253,8 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 							//fmt.Println("connection queue close :  due to queue close")
 						}
 					}
-				}()
+				}()*/
+
 				failOnError(err, "Failed to publish a message")
 
 				msgItem.Ack(true)
