@@ -193,8 +193,8 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 				go func() {
 					for { //receive loop
 						ok := <-returns
-						fmt.Println("Code", ok.ReplyCode)
-						if ok.ReplyCode == 312 {
+						//fmt.Println(ok)
+						if ok.ReplyCode >= 0 {
 							fmt.Println(msgItem)
 							msgItem.Ack(true)
 							//panic("queue closed")
