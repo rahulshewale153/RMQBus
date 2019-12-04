@@ -114,6 +114,7 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 	temp := strings.Split(topic, ".")
 	exchange, rKey := temp[0], temp[1]
 	ch, err := RMQ.Conn.Channel()
+	defer ch.Close()
 	failOnError(err, "Failed to open a channel")
 	err = ch.Publish(
 		exchange, // exchange
