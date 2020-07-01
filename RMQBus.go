@@ -71,7 +71,7 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	q, err := ch.QueueDeclare(
 		"",    // name
 		false, // durable
-		false, // delete when unused
+		true,  // delete when unused // false
 		true,  // exclusive
 		false, // noWait
 		nil,   // arguments
