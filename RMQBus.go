@@ -6,7 +6,6 @@ import (
 	"log"
 	"math/rand"
 	"strings"
-	"sync"
 
 	"github.com/joho/godotenv"
 	"github.com/streadway/amqp"
@@ -20,38 +19,39 @@ type RMQ struct {
 type EventHandler func(interface{}, chan interface{})
 
 var singleton *RMQ
-var once sync.Once
+
+//var once sync.Once
 var Qclose = make(chan bool)
 
 func GetConnection(rmqConfig DefaultOptions) *RMQ {
-	once.Do(func() {
-		conn, err := amqp.Dial(rmqConfig.URL)
-		failOnError(err, "Failed to connect to RabbitMQ")
-		notify := conn.NotifyClose(make(chan *amqp.Error)) //error channels
-		go func() {
-			for { //receive loop
-				ok := <-notify
-				if ok != nil {
-					Qclose <- true
-					fmt.Println("connection close asdasd")
-				}
+	//once.Do(func() {
+	conn, err := amqp.Dial(rmqConfig.URL)
+	failOnError(err, "Failed to connect to RabbitMQ")
+	notify := conn.NotifyClose(make(chan *amqp.Error)) //error channels
+	go func() {
+		for { //receive loop
+			ok := <-notify
+			if ok != nil {
+				Qclose <- true
+				fmt.Println("connection close asdasd")
 			}
-		}()
-		ch, err := conn.Channel()
-		/*cancels := ch.NotifyCancel(make(chan string, 1))
-		go func() {
-			for { //receive loop
-				ok := <-cancels
-				fmt.Println("asd", ok)
-				if ok != "" {
-					Qclose <- true
-					fmt.Println("connection close notify cancle")
-				}
+		}
+	}()
+	ch, err := conn.Channel()
+	/*cancels := ch.NotifyCancel(make(chan string, 1))
+	go func() {
+		for { //receive loop
+			ok := <-cancels
+			fmt.Println("asd", ok)
+			if ok != "" {
+				Qclose <- true
+				fmt.Println("connection close notify cancle")
 			}
-		}()*/
-		failOnError(err, "Failed to open a channel")
-		singleton = &RMQ{Ch: ch, Conn: conn, Options: rmqConfig}
-	})
+		}
+	}()*/
+	failOnError(err, "Failed to open a channel")
+	singleton = &RMQ{Ch: ch, Conn: conn, Options: rmqConfig}
+	//})
 	return singleton
 }
 func init() {
