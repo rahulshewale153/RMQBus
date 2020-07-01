@@ -77,7 +77,8 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 		nil,   // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
-	options.CONSUME_CALL_NOACK = true
+	fmt.Println("optioins", options)
+	//options.CONSUME_CALL_NOACK = true
 	fmt.Println("autoack - ", options.CONSUME_CALL_NOACK)
 	msgs, err := ch.Consume(
 		q.Name, // queue
@@ -109,7 +110,7 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 			res = json.Unmarshal([]byte(d.Body), &req)
 			failOnError(err, "Failed to convert body to json")
 			fmt.Println("reading done")
-			ch.Cancel(d.ConsumerTag, true)
+			//ch.Cancel(d.ConsumerTag, true)
 			break
 		}
 	}
