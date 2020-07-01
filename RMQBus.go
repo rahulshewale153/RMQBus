@@ -77,6 +77,7 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 		nil,   // arguments
 	)
 	failOnError(err, "Failed to declare a queue")
+	options.CONSUME_CALL_NOACK = true
 	fmt.Println("autoack - ", options.CONSUME_CALL_NOACK)
 	msgs, err := ch.Consume(
 		q.Name, // queue
