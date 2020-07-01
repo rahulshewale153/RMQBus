@@ -66,7 +66,7 @@ func init() {
 func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	options := RMQ.Options
 	ch, err := RMQ.Conn.Channel()
-	//defer ch.Close()
+	defer ch.Close()
 	failOnError(err, "Failed to open a channel")
 	q, err := ch.QueueDeclare(
 		"",    // name
@@ -110,7 +110,7 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 			res = json.Unmarshal([]byte(d.Body), &req)
 			failOnError(err, "Failed to convert body to json")
 			fmt.Println("reading done")
-			//ch.Cancel(d.ConsumerTag, true)
+			ch.Cancel(d.ConsumerTag, true)
 			break
 		}
 	}
