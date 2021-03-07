@@ -81,13 +81,13 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	//options.CONSUME_CALL_NOACK = true
 	fmt.Println("autoack - ", options.CONSUME_CALL_NOACK)
 	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
+		q.Name,                     // queue
+		"",                         // consumer
 		options.CONSUME_CALL_NOACK, // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
+		false,                      // exclusive
+		false,                      // no-local
+		false,                      // no-wait
+		nil,                        // args
 	)
 	failOnError(err, "Failed to register a consumer")
 	corrId := randomString(32)
@@ -116,7 +116,7 @@ func (RMQ *RMQ) Rpc(topic string, msg string) interface{} {
 	}
 	return res
 }
-func (RMQ *RMQ) Publish(topic string, msg string) {
+func (RMQ *RMQ) Publish(topic string, msg string) string {
 	temp := strings.Split(topic, ".")
 	exchange, rKey := temp[0], temp[1]
 	ch, err := RMQ.Conn.Channel()
@@ -132,9 +132,10 @@ func (RMQ *RMQ) Publish(topic string, msg string) {
 			Body:        []byte(msg),
 		})
 	failOnError(err, "Failed to publish a message")
-	log.Printf(" [x] Sent To %s", topic)
+	return fmt.Sprintf(" [x] Sent To %s", topic)
 }
-func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) {
+func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consumerRegistry map[string]EventHandler, globalConsumerRegsitry map[string]EventHandler) []string {
+	var responseMessage []string
 	initCh, err := RMQ.Conn.Channel()
 	failOnError(err, "Failed to open a channel")
 	options := RMQ.Options
@@ -153,8 +154,8 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 			options.RESPONDER_QUEUE_DURABLE,   // durable
 			options.RESPONDER_QUEUE_AUTODEL,   // delete when usused
 			options.RESPONDER_QUEUE_EXCLUSIVE, // exclusive
-			false, // no-wait
-			nil,   // arguments
+			false,                             // no-wait
+			nil,                               // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 		msgs, err := initCh.Consume(
@@ -170,7 +171,6 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 		go func() {
 			for { //receive loop
 				ok := <-notifych
-				fmt.Println("printing ok", ok)
 				if ok != nil {
 					//Qclose <- true
 					fmt.Println("connection queue close ", ok)
@@ -222,18 +222,24 @@ func (RMQ *RMQ) InitFunctions(responderRegistry map[string]EventHandler, consume
 					//panic(fmt.Sprintf("%s: %s", msg, err))
 				}
 				errrr := msgItem.Ack(false)
-				fmt.Println(errrr)
+				if errrr != nil {
+					fmt.Println("msgItem.Ack error:", errrr)
+				}
 
 				//failOnError(err, "Failed to publish a message")
 
 			}
 		}()
-		fmt.Println(" [x] Responder Registerd for event :", topicName)
+		responseMessage = append(responseMessage, fmt.Sprintf(" [x] Responder Registerd for event :%s", topicName))
 	}
-	registerConumerFunctions(options, RMQ.Conn, consumerRegistry, false)
-	registerConumerFunctions(options, RMQ.Conn, globalConsumerRegsitry, true)
+	consurmerRegistryResponse := registerConumerFunctions(options, RMQ.Conn, consumerRegistry, false)
+	globalConsurmerRegistryResponse := registerConumerFunctions(options, RMQ.Conn, globalConsumerRegsitry, true)
+	responseMessage = append(responseMessage, consurmerRegistryResponse...)
+	responseMessage = append(responseMessage, globalConsurmerRegistryResponse...)
+	return responseMessage
 }
-func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler, isGlobal bool) {
+func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, funcRegistry map[string]EventHandler, isGlobal bool) []string {
+	var responseMessage []string
 	channelReg, err := rmqcon.Channel()
 	failOnError(err, "Failed to open a channel")
 	for e, consumerinstance := range funcRegistry {
@@ -246,13 +252,13 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			exchangeName = options.GLOBAL_EXCHANGE_NAME
 		}
 		err = channelReg.ExchangeDeclare(
-			exchangeName, // name
-			"direct",     // type
+			exchangeName,                      // name
+			"direct",                          // type
 			options.CONSUMER_EXCHANGE_DURABLE, // durable
 			options.CONSUMER_EXCHANGE_AUTODEL, // auto-deleted
-			false, // internal
-			false, // no-wait
-			nil,   // arguments
+			false,                             // internal
+			false,                             // no-wait
+			nil,                               // arguments
 		)
 		failOnError(err, "Failed to declare an exchange")
 		q, err := channelReg.QueueDeclare(
@@ -260,8 +266,8 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 			options.CONSUMER_QUEUE_DURABLE,   // durable
 			options.CONSUMER_QUEUE_AUTODEL,   // delete when usused
 			options.CONSUMER_QUEUE_EXCLUSIVE, // exclusive
-			false, // no-wait
-			nil,   // arguments
+			false,                            // no-wait
+			nil,                              // arguments
 		)
 		failOnError(err, "Failed to declare a queue")
 		err = channelReg.QueueBind(
@@ -302,8 +308,9 @@ func registerConumerFunctions(options DefaultOptions, rmqcon *amqp.Connection, f
 				<-cbFunc
 			}
 		}()
-		fmt.Println(" [x] Consumer registered for event :", QueueName)
+		responseMessage = append(responseMessage, fmt.Sprintf(" [x] Consumer registered for event :%s", QueueName))
 	}
+	return responseMessage
 }
 func (RMQ *RMQ) HandleQClose(done chan string) {
 	go func() {
